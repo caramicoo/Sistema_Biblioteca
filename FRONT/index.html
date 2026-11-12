@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#153a44">
+  <title>Sistema de Biblioteca — Protótipo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <div class="login-art" aria-hidden="true">
+      <div class="art-top"><span class="round-icon">▤</span> PROJETO INTEGRADOR • ADS</div>
+      <div class="art-copy"><div class="art-accent"></div><p>Uma biblioteca<br>mais organizada<br><em>começa aqui.</em></p><span>Gestão do acervo, atendimento e circulação de exemplares.</span></div>
+      <div class="art-bottom"><span>FATEC • PROTÓTIPO ACADÊMICO</span><span>01 / 01</span></div>
+      <div class="art-books" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="login-side">
+      <div class="login-card">
+        <div class="brand-logo"><span class="brand-mark">▤</span><span>Biblioteca<span class="brand-dot">.</span></span></div>
+        <div class="eyebrow">ACESSO DO FUNCIONÁRIO</div>
+        <h1>Bem-vindo de volta.</h1>
+        <p class="muted">Entre para visualizar o protótipo do sistema.</p>
+        <form id="loginForm">
+          <label for="loginUser">Usuário</label>
+          <input id="loginUser" name="usuario" autocomplete="username" value="funcionario" required>
+          <label for="loginPassword">Senha</label>
+          <input id="loginPassword" name="senha" type="password" autocomplete="current-password" placeholder="Digite a senha" required>
+          <button class="btn btn-primary login-button" type="submit">Entrar no sistema <span aria-hidden="true">→</span></button>
+          <p class="login-error" id="loginError" role="alert" hidden>Usuário ou senha inválidos para a demonstração.</p>
+        </form>
+        <div class="demo-credentials"><span class="demo-dot"></span><span>Acesso de demonstração: <strong>funcionario</strong> / <strong>demo123</strong></span></div>
+        <p class="login-disclaimer">Protótipo visual — a autenticação é simulada. Não inserir dados pessoais reais.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="appShell" class="app-shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand"><span class="brand-mark">▤</span><span>Biblioteca<span class="brand-dot">.</span></span></div>
+      <div class="sidebar-group-label">ÁREA DE TRABALHO</div>
+      <nav class="nav" id="mainNav" aria-label="Menu principal">
+        <button type="button" data-route="dashboard" class="nav-link active"><span class="nav-icon">▦</span>Visão geral</button>
+        <button type="button" data-route="acervo" class="nav-link"><span class="nav-icon">▤</span>Acervo</button>
+        <button type="button" data-route="leitores" class="nav-link"><span class="nav-icon">♙</span>Leitores</button>
+        <button type="button" data-route="emprestimos" class="nav-link"><span class="nav-icon">↗</span>Empréstimos</button>
+        <button type="button" data-route="devolucoes" class="nav-link"><span class="nav-icon">↙</span>Devoluções</button>
+        <button type="button" data-route="reservas" class="nav-link"><span class="nav-icon">▣</span>Reservas</button>
+        <button type="button" data-route="vencidos" class="nav-link"><span class="nav-icon">◷</span>Vencidos</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="prototype-indicator"><span class="indicator-pulse"></span><span><strong>Modo demonstração</strong><small>Dados fictícios • sem servidor</small></span></div>
+        <button type="button" class="nav-link secondary-link" data-route="sobre"><span class="nav-icon">ⓘ</span>Sobre o projeto</button>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><button type="button" class="mobile-menu" id="menuToggle" aria-label="Abrir menu">☰</button><div class="topbar-breadcrumb">SISTEMA DE BIBLIOTECA <span>/</span> <strong id="currentPageText">VISÃO GERAL</strong></div><div class="topbar-right"><span class="demo-label">AMBIENTE DE DEMONSTRAÇÃO</span><span class="avatar">F</span><span class="staff-label">Funcionário</span><button type="button" class="logout-btn" id="logoutBtn">Sair</button></div></header>
+      <main id="view" class="view" tabindex="-1" aria-live="polite"></main>
+      <footer class="footer">Sistema de Biblioteca • Projeto Integrador • Protótipo frontend sem integração com banco de dados</footer>
+    </div>
+    <div class="mobile-scrim" id="mobileScrim"></div>
+  </div>
+  <div id="modalRoot" class="modal-root" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
