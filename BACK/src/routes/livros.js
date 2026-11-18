@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 'use strict';
 const router = require('express').Router();
 const { pool, transaction } = require('../db');
@@ -7,7 +6,7 @@ const { pagination } = require('../lib/pagination');
 const { notFound, conflict } = require('../lib/errors');
 function payload(body) {
   return {
-    titulo: requiredString(body.titulo, 'T�tulo', 160),
+    titulo: requiredString(body.titulo, 'Título', 160),
     autor: requiredString(body.autor, 'Autor', 120),
     isbn: requiredString(body.isbn, 'ISBN', 22),
     categoria: optionalString(body.categoria, 'Categoria', 80)
@@ -32,11 +31,11 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const id = positiveId(req.params.id);
   const [rows] = await pool.execute('SELECT * FROM livro WHERE id_livro=?', [id]);
-  if (!rows.length) throw notFound('Livro n�o encontrado.');
+  if (!rows.length) throw notFound('Livro não encontrado.');
   const [exemplares] = await pool.execute('SELECT id_exemplar, tombo, situacao FROM exemplar WHERE id_livro=? ORDER BY id_exemplar', [id]);
   res.json({ ...rows[0], exemplares });
 });
-// Cria��o at�mica da obra e do primeiro exemplar.
+// Criação atômica da obra e do primeiro exemplar.
 router.post('/com-exemplar', async (req, res) => {
   const value = payload(req.body);
   const tombo = requiredString(req.body.tombo, 'Tombo', 40);
@@ -59,16 +58,15 @@ router.put('/:id', async (req, res) => {
   const id = positiveId(req.params.id);
   const value = payload(req.body);
   const [result] = await pool.execute('UPDATE livro SET titulo=?,autor=?,isbn=?,categoria=? WHERE id_livro=?', [...Object.values(value), id]);
-  if (!result.affectedRows) throw notFound('Livro n�o encontrado.');
+  if (!result.affectedRows) throw notFound('Livro não encontrado.');
   res.json({ mensagem: 'Livro atualizado.', id_livro: id });
 });
 router.delete('/:id', async (req, res) => {
   const id = positiveId(req.params.id);
   const [copies] = await pool.execute('SELECT COUNT(*) AS total FROM exemplar WHERE id_livro=?', [id]);
-  if (copies[0].total > 0) throw conflict('Remova os exemplares sem hist�rico antes de excluir o livro.');
+  if (copies[0].total > 0) throw conflict('Remova os exemplares sem histórico antes de excluir o livro.');
   const [result] = await pool.execute('DELETE FROM livro WHERE id_livro=?', [id]);
-  if (!result.affectedRows) throw notFound('Livro n�o encontrado.');
-  res.json({ mensagem: 'Livro exclu�do.' });
+  if (!result.affectedRows) throw notFound('Livro não encontrado.');
+  res.json({ mensagem: 'Livro excluído.' });
 });
 module.exports = router;
-
