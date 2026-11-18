@@ -208,6 +208,7 @@
         return perform('POST','/leitores',value,'Leitor cadastrado no banco.');
       }});}
   function showReader(id){const r=readerById(id);if(!r)return;const readerLoans=openLoans().filter(l=>l.leitorId===r.id);modal('Ficha do leitor','Informações de consulta',`<div class="modal-detail"><span>Nome</span><strong>${e(r.nome)}</strong></div><div class="modal-detail"><span>Identificação</span><strong>${e(r.identificacao)}</strong></div><div class="modal-detail"><span>Contato</span><strong>${e(r.contato)}</strong></div><div class="modal-detail"><span>Empréstimos abertos</span><strong>${readerLoans.length}</strong></div><div class="modal-detail"><span>Possui atraso?</span><strong>${hasOverdue(r.id)?'Sim':'Não'}</strong></div><div class="modal-foot"><button type="button" class="btn btn-outline" data-close-modal>Fechar</button></div>`,{showFooter:false});}
+  function createStaff(){const html='<label for="staffName">Nome completo *</label><input id="staffName" name="nome" maxlength="120" autocomplete="name" required><label for="staffLogin">Login *</label><input id="staffLogin" name="login" maxlength="60" pattern="[A-Za-z0-9._-]+" autocomplete="username" required><label for="staffPassword">Senha *</label><input id="staffPassword" name="senha" type="password" minlength="10" maxlength="200" autocomplete="new-password" required><p class="form-help">Use pelo menos 10 caracteres. A senha será armazenada somente como hash.</p>';modal('Criar acesso de funcionário','Cadastre o acesso que será usado para entrar no sistema.',html,{submitLabel:'Criar acesso',onConfirm:async form=>{const value=Object.fromEntries(new FormData(form));Object.keys(value).forEach(key=>value[key]=value[key].trim());return perform('POST','/auth/cadastro',value,'Funcionário cadastrado. Agora faça login.');}});}
   async function registerLoan(form){
     const id_leitor=Number(form.leitorId.value),id_exemplar=Number(form.exemplarId.value),data_prevista=form.dataPrevista.value;
     if(!readerById(id_leitor)?.ativo)return showToast('Selecione um leitor ativo.',true);
@@ -237,7 +238,7 @@
     const closeButton=event.target.closest('[data-close-modal]');if(closeButton){closeModal();return;}
     const button=event.target.closest('[data-action]');if(!button)return;
     const id=Number(button.dataset.id);
-    switch(button.dataset.action){case 'refresh-data':updateFromServer();break;case 'create-book':createBook();break;case 'show-book':showBook(id);break;case 'add-copy':addCopy(id);break;case 'create-reader':createReader();break;case 'show-reader':showReader(id);break;case 'start-return':startReturn(id);break;case 'cancel-reservation':cancelReservation(id);break;}
+    switch(button.dataset.action){case 'refresh-data':updateFromServer();break;case 'create-book':createBook();break;case 'show-book':showBook(id);break;case 'add-copy':addCopy(id);break;case 'create-reader':createReader();break;case 'create-staff':createStaff();break;case 'show-reader':showReader(id);break;case 'start-return':startReturn(id);break;case 'cancel-reservation':cancelReservation(id);break;}
   });
   document.addEventListener('input',event=>{if(event.target.id==='bookSearch')updateBookRows();if(event.target.id==='readerSearch')updateReaderRows();});
   document.addEventListener('submit',async event=>{
