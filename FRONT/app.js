@@ -177,52 +177,51 @@
       </div><div class="callout" style="margin-top:23px"><strong>Limite deste MVP:</strong> os dados fictícios são salvos apenas neste navegador, quando o armazenamento está disponível. Não há autenticação segura nem integração com servidor. Os prazos, limites por leitor e a ordem de atendimento de reservas ainda dependem de validação.</div>`;
   }
   const views={dashboard,acervo,leitores,emprestimos,devolucoes,reservas,vencidos,sobre};
-  function createBook(){modal('Cadastrar livro','Cadastre uma obra e seu primeiro exemplar.',`<label for="newBookTitle">Título *</label><input id="newBookTitle" name="titulo" maxlength="150" required><label for="newBookAuthor">Autor *</label><input id="newBookAuthor" name="autor" maxlength="120" required><label for="newBookISBN">ISBN *</label><input id="newBookISBN" name="isbn" maxlength="22" required><label for="newBookCategory">Categoria *</label><input id="newBookCategory" name="categoria" maxlength="80" required><label for="newBookCopy">Tombo do exemplar *</label><input id="newBookCopy" name="tombo" maxlength="30" placeholder="Ex.: T-0010" required>`,{submitLabel:'Cadastrar livro',onConfirm:form=>{
-      const v=Object.fromEntries(new FormData(form)); Object.keys(v).forEach(k=>v[k]=v[k].trim());
-      if(data.livros.some(b=>b.isbn.toLowerCase()===v.isbn.toLowerCase()))return showToast('Este ISBN já está cadastrado. Use “Adicionar exemplar”.',true),false;
-      if(data.exemplares.some(c=>c.tombo.toLowerCase()===v.tombo.toLowerCase()))return showToast('O número de tombo já existe.',true),false;
-      const id=nextId(data.livros);data.livros.push({id,titulo:v.titulo,autor:v.autor,isbn:v.isbn,categoria:v.categoria});data.exemplares.push({id:nextId(data.exemplares),livroId:id,tombo:v.tombo});save();render();showToast('Livro e exemplar cadastrados.');return true;
+  function createBook(){modal('Cadastrar livro','Cadastre uma obra e seu primeiro exemplar.',`<label for="newBookTitle">Título *</label><input id="newBookTitle" name="titulo" maxlength="150" required><label for="newBookAuthor">Autor *</label><input id="newBookAuthor" name="autor" maxlength="120" required><label for="newBookISBN">ISBN *</label><input id="newBookISBN" name="isbn" maxlength="22" required><label for="newBookCategory">Categoria *</label><input id="newBookCategory" name="categoria" maxlength="80" required><label for="newBookCopy">Tombo do exemplar *</label><input id="newBookCopy" name="tombo" maxlength="30" placeholder="Ex.: T-0010" required>`,{submitLabel:'Cadastrar livro',onConfirm:async form=>{
+      const value=Object.fromEntries(new FormData(form));
+      Object.keys(value).forEach(key=>value[key]=value[key].trim());
+      return perform('POST','/livros/com-exemplar',value,'Livro e exemplar cadastrados no MySQL.');
     }});}
   function showBook(id){const book=bookById(id);if(!book)return;const copies=data.exemplares.filter(c=>c.livroId===book.id);
     const copyRows=copies.map(c=>`<div class="modal-detail"><span>${e(c.tombo)}</span><strong>${badge(copyStatus(c.id))}${activeReservation(c.id)&&openLoan(c.id)?' • com reserva':''}</strong></div>`).join('');
     modal('Exemplares da obra',`${e(book.titulo)} • ${e(book.autor)}`,`<div class="modal-detail"><span>ISBN</span><strong>${e(book.isbn)}</strong></div><div class="modal-detail"><span>Categoria</span><strong>${e(book.categoria)}</strong></div>${copyRows}<div class="modal-foot"><button type="button" class="btn btn-outline" data-close-modal>Fechar</button><button type="button" class="btn btn-primary" data-action="add-copy" data-id="${book.id}">＋ Adicionar exemplar</button></div>`,{showFooter:false});}
-  function addCopy(bookId){const book=bookById(bookId);if(!book)return;modal('Adicionar exemplar',`Nova cópia física de ${e(book.titulo)}.`,`<label for="newCopyTombo">Número de tombo único *</label><input id="newCopyTombo" name="tombo" maxlength="30" placeholder="Ex.: T-0010" required>`,{submitLabel:'Adicionar exemplar',onConfirm:form=>{const tombo=form.tombo.value.trim();if(data.exemplares.some(c=>c.tombo.toLowerCase()===tombo.toLowerCase()))return showToast('Esse tombo já existe.',true),false;data.exemplares.push({id:nextId(data.exemplares),livroId:bookId,tombo});save();render();showToast('Novo exemplar cadastrado.');return true;}});}
-  function createReader(){modal('Cadastrar leitor','O leitor é identificado, mas não possui login no sistema.',`<label for="readerName">Nome completo *</label><input id="readerName" name="nome" maxlength="100" required><label for="readerId">Identificação *</label><input id="readerId" name="identificacao" maxlength="30" placeholder="Ex.: L-0006" required><label for="readerContact">Contato *</label><input id="readerContact" name="contato" maxlength="120" placeholder="Telefone ou e-mail de exemplo" required>`,{submitLabel:'Cadastrar leitor',onConfirm:form=>{const v=Object.fromEntries(new FormData(form));Object.keys(v).forEach(k=>v[k]=v[k].trim());if(data.leitores.some(r=>r.identificacao.toLowerCase()===v.identificacao.toLowerCase()))return showToast('Esta identificação já está cadastrada.',true),false;data.leitores.push({id:nextId(data.leitores),nome:v.nome,identificacao:v.identificacao,contato:v.contato,ativo:true});save();render();showToast('Leitor cadastrado.');return true;}});}
+  function addCopy(bookId){const book=bookById(bookId);if(!book)return;modal('Adicionar exemplar',`Nova cópia física de ${e(book.titulo)}.`,`<label for="newCopyTombo">Número de tombo único *</label><input id="newCopyTombo" name="tombo" maxlength="30" placeholder="Ex.: T-0010" required>`,{submitLabel:'Adicionar exemplar',onConfirm:async form=>perform('POST','/exemplares',{id_livro:bookId,tombo:form.tombo.value.trim()},'Exemplar cadastrado no banco.')});}
+  function createReader(){modal('Cadastrar leitor','O leitor é identificado, mas não possui login no sistema.',`<label for="readerName">Nome completo *</label><input id="readerName" name="nome" maxlength="100" required><label for="readerId">Identificação *</label><input id="readerId" name="identificacao" maxlength="30" placeholder="Ex.: L-0006" required><label for="readerContact">Contato *</label><input id="readerContact" name="contato" maxlength="120" placeholder="Telefone ou e-mail de exemplo" required>`,{submitLabel:'Cadastrar leitor',onConfirm:async form=>{
+        const value=Object.fromEntries(new FormData(form));
+        Object.keys(value).forEach(key=>value[key]=value[key].trim());
+        return perform('POST','/leitores',value,'Leitor cadastrado no banco.');
+      }});}
   function showReader(id){const r=readerById(id);if(!r)return;const readerLoans=openLoans().filter(l=>l.leitorId===r.id);modal('Ficha do leitor','Informações de consulta',`<div class="modal-detail"><span>Nome</span><strong>${e(r.nome)}</strong></div><div class="modal-detail"><span>Identificação</span><strong>${e(r.identificacao)}</strong></div><div class="modal-detail"><span>Contato</span><strong>${e(r.contato)}</strong></div><div class="modal-detail"><span>Empréstimos abertos</span><strong>${readerLoans.length}</strong></div><div class="modal-detail"><span>Possui atraso?</span><strong>${hasOverdue(r.id)?'Sim':'Não'}</strong></div><div class="modal-foot"><button type="button" class="btn btn-outline" data-close-modal>Fechar</button></div>`,{showFooter:false});}
-  function registerLoan(form){
-    const leitorId=Number(form.leitorId.value), exemplarId=Number(form.exemplarId.value),dataPrevista=form.dataPrevista.value;
-    if(!readerById(leitorId)?.ativo)return showToast('Selecione um leitor ativo.',true);
-    if(!copyById(exemplarId))return showToast('Selecione um exemplar válido.',true);
-    if(dataPrevista<dateToday)return showToast('Informe um prazo igual ou posterior a hoje.',true);
-    if(hasOverdue(leitorId))return showToast('RN02: leitor possui empréstimo vencido e não pode retirar outro livro.',true);
-    if(openLoan(exemplarId))return showToast('RN01: este exemplar já está emprestado.',true);
-    const reservation=activeReservation(exemplarId);
-    if(reservation&&reservation.leitorId!==leitorId)return showToast('RN01: exemplar reservado para outro leitor.',true);
-    if(reservation){reservation.situacao='atendida';}
-    data.emprestimos.push({id:nextId(data.emprestimos),leitorId,exemplarId,funcionarioRetiradaId:1,funcionarioDevolucaoId:null,dataRetirada:dateToday,dataPrevista,dataDevolucao:null});
-    save();render();showToast('Empréstimo registrado com sucesso.');
+  async function registerLoan(form){
+    const id_leitor=Number(form.leitorId.value),id_exemplar=Number(form.exemplarId.value),data_prevista=form.dataPrevista.value;
+    if(!readerById(id_leitor)?.ativo)return showToast('Selecione um leitor ativo.',true);
+    if(!copyById(id_exemplar))return showToast('Selecione um exemplar válido.',true);
+    if(data_prevista<daysFromToday(0))return showToast('Informe prazo válido.',true);
+    await perform('POST','/emprestimos',{id_leitor,id_exemplar,data_prevista},'Empréstimo registrado no MySQL.');
   }
   function startReturn(id){const loan=data.emprestimos.find(l=>l.id===Number(id)&&!l.dataDevolucao);if(!loan)return showToast('Empréstimo não está em aberto.',true);
     const title=e(bookForCopy(loan.exemplarId)?.titulo||'Livro'),copy=e(copyById(loan.exemplarId)?.tombo||'');const reservation=activeReservation(loan.exemplarId);
-    modal('Confirmar devolução',`Registro de devolução do exemplar ${copy}.`,`<div class="modal-detail"><span>Livro</span><strong>${title}</strong></div><div class="modal-detail"><span>Leitor</span><strong>${e(readerById(loan.leitorId)?.nome||'')}</strong></div><div class="modal-detail"><span>Data de devolução</span><strong>${formatDate(dateToday)}</strong></div><div class="modal-detail"><span>Depois de devolver</span><strong>${reservation?'Exemplar reservado':'Exemplar disponível'}</strong></div>`,{submitLabel:'Confirmar devolução',onConfirm:()=>{loan.dataDevolucao=dateToday;loan.funcionarioDevolucaoId=1;save();render();showToast(reservation?'Devolução registrada. Exemplar permanece reservado.':'Devolução registrada. Exemplar disponível.');return true;}});
+    modal('Confirmar devolução',`Registro de devolução do exemplar ${copy}.`,`<div class="modal-detail"><span>Livro</span><strong>${title}</strong></div><div class="modal-detail"><span>Leitor</span><strong>${e(readerById(loan.leitorId)?.nome||'')}</strong></div><div class="modal-detail"><span>Data de devolução</span><strong>${formatDate(daysFromToday(0))}</strong></div><div class="modal-detail"><span>Depois de devolver</span><strong>${reservation?'Exemplar reservado':'Exemplar disponível'}</strong></div>`,{submitLabel:'Confirmar devolução',onConfirm:async()=>perform('PUT',`/emprestimos/${id}/devolucao`,undefined,'Devolução registrada no MySQL.')});
   }
-  function registerReservation(form){const leitorId=Number(form.leitorId.value),exemplarId=Number(form.exemplarId.value);
-    if(!readerById(leitorId)?.ativo)return showToast('Selecione um leitor ativo.',true);
-    if(!copyById(exemplarId))return showToast('Exemplar não encontrado.',true);
-    if(data.reservas.some(r=>r.exemplarId===exemplarId&&r.leitorId===leitorId&&r.situacao==='ativa'))return showToast('RN06: o leitor já possui reserva ativa desse exemplar.',true);
-    if(activeReservation(exemplarId))return showToast('Já existe uma reserva ativa. A fila de reservas ainda não foi definida.',true);
-    data.reservas.push({id:nextId(data.reservas),leitorId,exemplarId,funcionarioId:1,dataReserva:dateToday,situacao:'ativa'});save();render();showToast('Reserva registrada pelo funcionário.');
+  async function registerReservation(form){
+    const id_leitor=Number(form.leitorId.value),id_exemplar=Number(form.exemplarId.value);
+    if(!readerById(id_leitor)?.ativo)return showToast('Selecione um leitor ativo.',true);
+    if(!copyById(id_exemplar))return showToast('Exemplar inválido.',true);
+    await perform('POST','/reservas',{id_leitor,id_exemplar},'Reserva registrada no MySQL.');
   }
   function cancelReservation(id){const reservation=data.reservas.find(r=>r.id===Number(id)&&r.situacao==='ativa');if(!reservation)return showToast('Reserva não está ativa.',true);
-    modal('Cancelar reserva','Esta ação encerra a reserva na demonstração.',`<div class="modal-detail"><span>Livro</span><strong>${e(bookForCopy(reservation.exemplarId)?.titulo||'')}</strong></div><div class="modal-detail"><span>Leitor</span><strong>${e(readerById(reservation.leitorId)?.nome||'')}</strong></div>`,{submitLabel:'Confirmar cancelamento',onConfirm:()=>{reservation.situacao='cancelada';save();render();showToast('Reserva cancelada.');return true;}});
+    modal('Cancelar reserva','Esta ação encerra a reserva ativa no MySQL.',`<div class="modal-detail"><span>Livro</span><strong>${e(bookForCopy(reservation.exemplarId)?.titulo||'')}</strong></div><div class="modal-detail"><span>Leitor</span><strong>${e(readerById(reservation.leitorId)?.nome||'')}</strong></div>`,{submitLabel:'Confirmar cancelamento',onConfirm:async()=>perform('PUT',`/reservas/${id}/cancelamento`,undefined,'Reserva cancelada no MySQL.')});
   }
-  function resetData(){modal('Restaurar dados de exemplo','Remove os registros feitos nesta demonstração e restaura o conjunto inicial de dados.',`<div class="callout">Esta ação apaga apenas os dados fictícios gravados por este protótipo neste navegador.</div>`,{submitLabel:'Restaurar dados',onConfirm:()=>{data=seed();save();render();showToast('Dados de demonstração restaurados.');return true;}});}
+  async function updateFromServer(){
+    try{await refreshData();showToast('Dados atualizados.');}
+    catch(error){showToast(error.message,true);}
+  }
   document.addEventListener('click',event=>{
     const routeButton=event.target.closest('[data-route]');if(routeButton){navigate(routeButton.dataset.route);return;}
     const closeButton=event.target.closest('[data-close-modal]');if(closeButton){closeModal();return;}
     const button=event.target.closest('[data-action]');if(!button)return;
     const id=Number(button.dataset.id);
-    switch(button.dataset.action){case 'reset-data':resetData();break;case 'create-book':createBook();break;case 'show-book':showBook(id);break;case 'add-copy':addCopy(id);break;case 'create-reader':createReader();break;case 'show-reader':showReader(id);break;case 'start-return':startReturn(id);break;case 'cancel-reservation':cancelReservation(id);break;}
+    switch(button.dataset.action){case 'refresh-data':updateFromServer();break;case 'create-book':createBook();break;case 'show-book':showBook(id);break;case 'add-copy':addCopy(id);break;case 'create-reader':createReader();break;case 'show-reader':showReader(id);break;case 'start-return':startReturn(id);break;case 'cancel-reservation':cancelReservation(id);break;}
   });
   document.addEventListener('input',event=>{if(event.target.id==='bookSearch')updateBookRows();if(event.target.id==='readerSearch')updateReaderRows();});
   document.addEventListener('submit',event=>{
