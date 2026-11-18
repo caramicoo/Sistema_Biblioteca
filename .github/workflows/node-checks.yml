@@ -1,0 +1,22 @@
+name: Verificação do Sistema de Biblioteca
+on:
+  push:
+    branches: [main, integracao-api-mysql-tg]
+  pull_request:
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BACK
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - run: npm test
+      - run: node --check ../FRONT/app.js
+      - run: node --check src/app.js
+      - run: node --check src/routes/livros.js
+      - run: node --check scripts/criar-funcionario.js
