@@ -1,6 +1,6 @@
 'use strict';
 const router = require('express').Router();
-const { pool } = require('../db');
+const { pool, transaction } = require('../db');
 const { requiredString, optionalString, positiveId, queryText } = require('../lib/validate');
 const { pagination } = require('../lib/pagination');
 const { notFound, conflict } = require('../lib/errors');
@@ -34,6 +34,19 @@ router.get('/:id', async (req, res) => {
   if (!rows.length) throw notFound('Livro não encontrado.');
   const [exemplares] = await pool.execute('SELECT id_exemplar, tombo, situacao FROM exemplar WHERE id_livro=? ORDER BY id_exemplar', [id]);
   res.json({ ...rows[0], exemplares });
+});
+// Criação atômica da obra e do primeiro exemplar.
+router.post('/com-exemplar', async (req, res) => {
+  const value = payload(req.body);
+  const tombo = requiredString(req.body.tombo, 'Tombo', 40);
+  const ids = await transaction(async connection => {
+    const [livro] = await connection.execute(
+      'INSERT INTO livro (titulo,autor,isbn,categoria) VALUES (?,?,?,?)', Object.values(value));
+    const [exemplar] = await connection.execute(
+      'INSERT INTO exemplar (id_livro,tombo) VALUES (?,?)', [livro.insertId, tombo]);
+    return { id_livro: livro.insertId, id_exemplar: exemplar.insertId };
+  });
+  res.status(201).json({ mensagem: 'Livro e exemplar cadastrados.', ...ids });
 });
 router.post('/', async (req, res) => {
   const value = payload(req.body);
