@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 'use strict';
 const router = require('express').Router();
 const { pool, transaction } = require('../db');
@@ -25,7 +24,7 @@ router.get('/', async (req, res) => {
   const date = today();
   const { limit, offset, page } = pagination(req.query);
   const situacao = req.query.situacao;
-  if (situacao !== undefined && !['aberto','vencido','devolvido'].includes(situacao)) throw badRequest('Situa��o inv�lida.');
+  if (situacao !== undefined && !['aberto','vencido','devolvido'].includes(situacao)) throw badRequest('Situação inválida.');
   let where = '';
   let params = [date,date];
   if (situacao === 'devolvido') where = 'WHERE em.data_devolucao IS NOT NULL';
@@ -37,19 +36,19 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const date = today();
   const [rows] = await pool.execute(`${detailSql} WHERE em.id_emprestimo=?`, [date,date,positiveId(req.params.id)]);
-  if (!rows.length) throw notFound('Empr�stimo n�o encontrado.');
+  if (!rows.length) throw notFound('Empréstimo não encontrado.');
   res.json(rows[0]);
 });
 router.post('/', async (req, res) => {
   const idLeitor = positiveId(req.body.id_leitor, 'id_leitor');
   const idExemplar = positiveId(req.body.id_exemplar, 'id_exemplar');
-  const dataPrevista = isoDate(req.body.data_prevista, 'Prazo de devolu��o');
+  const dataPrevista = isoDate(req.body.data_prevista, 'Prazo de devolução');
   const date = today();
-  if (dataPrevista < date) throw badRequest('O prazo de devolu��o n�o pode ser anterior a hoje.');
+  if (dataPrevista < date) throw badRequest('O prazo de devolução não pode ser anterior a hoje.');
   const id = await transaction(async connection => {
-    // Bloqueio do exemplar impede empr�stimo e reserva concorrentes.
+    // Bloqueio do exemplar impede empréstimo e reserva concorrentes.
     const [copies] = await connection.execute('SELECT id_exemplar, situacao FROM exemplar WHERE id_exemplar=? FOR UPDATE', [idExemplar]);
-    if (!copies.length) throw notFound('Exemplar n�o encontrado.');
+    if (!copies.length) throw notFound('Exemplar não encontrado.');
     const [readers] = await connection.execute('SELECT id_leitor, ativo FROM leitor WHERE id_leitor=? FOR UPDATE', [idLeitor]);
     if (!readers.length || !readers[0].ativo) throw conflict('Leitor inexistente ou inativo.');
     const [late] = await connection.execute('SELECT COUNT(*) AS total FROM emprestimo WHERE id_leitor=? AND data_devolucao IS NULL AND data_prevista < ?', [idLeitor, date]);
@@ -68,26 +67,25 @@ router.post('/', async (req, res) => {
     await connection.execute("UPDATE exemplar SET situacao='emprestado' WHERE id_exemplar=?", [idExemplar]);
     return result.insertId;
   });
-  res.status(201).json({ mensagem: 'Empr�stimo registrado.', id_emprestimo: id, data_retirada: date, data_prevista: dataPrevista });
+  res.status(201).json({ mensagem: 'Empréstimo registrado.', id_emprestimo: id, data_retirada: date, data_prevista: dataPrevista });
 });
 router.put('/:id/devolucao', async (req, res) => {
   const loanId = positiveId(req.params.id);
   const date = today();
   const result = await transaction(async connection => {
-    // Primeiro identifica o exemplar; depois bloqueia o exemplar e o empr�stimo (ordem consistente).
+    // Primeiro identifica o exemplar; depois bloqueia o exemplar e o empréstimo (ordem consistente).
     const [reference] = await connection.execute('SELECT id_exemplar FROM emprestimo WHERE id_emprestimo=?', [loanId]);
-    if (!reference.length) throw notFound('Empr�stimo n�o encontrado.');
+    if (!reference.length) throw notFound('Empréstimo não encontrado.');
     const exemplarId = reference[0].id_exemplar;
     await connection.execute('SELECT id_exemplar FROM exemplar WHERE id_exemplar=? FOR UPDATE', [exemplarId]);
     const [loans] = await connection.execute('SELECT id_emprestimo,data_devolucao FROM emprestimo WHERE id_emprestimo=? FOR UPDATE', [loanId]);
-    if (loans[0].data_devolucao) throw conflict('O empr�stimo j� foi devolvido.');
+    if (loans[0].data_devolucao) throw conflict('O empréstimo já foi devolvido.');
     const [sets] = await connection.query(
       'CALL sp_registrar_devolucao(?,?,?)',
       [loanId, req.funcionario.id_funcionario, date]
     );
     return sets?.[0]?.[0]?.situacao_exemplar;
   });
-  res.json({ mensagem: 'Devolu��o registrada.', data_devolucao: date, situacao_exemplar: result });
+  res.json({ mensagem: 'Devolução registrada.', data_devolucao: date, situacao_exemplar: result });
 });
 module.exports = router;
-
