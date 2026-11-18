@@ -40,11 +40,12 @@ router.post('/com-exemplar', async (req, res) => {
   const value = payload(req.body);
   const tombo = requiredString(req.body.tombo, 'Tombo', 40);
   const ids = await transaction(async connection => {
-    const [livro] = await connection.execute(
-      'INSERT INTO livro (titulo,autor,isbn,categoria) VALUES (?,?,?,?)', Object.values(value));
-    const [exemplar] = await connection.execute(
-      'INSERT INTO exemplar (id_livro,tombo) VALUES (?,?)', [livro.insertId, tombo]);
-    return { id_livro: livro.insertId, id_exemplar: exemplar.insertId };
+    const [sets] = await connection.query(
+      'CALL sp_cadastrar_livro_com_exemplar(?,?,?,?,?)',
+      [value.titulo, value.autor, value.isbn, value.categoria || '', tombo]
+    );
+    const row = sets?.[0]?.[0];
+    return { id_livro: row.id_livro, id_exemplar: row.id_exemplar };
   });
   res.status(201).json({ mensagem: 'Livro e exemplar cadastrados.', ...ids });
 });

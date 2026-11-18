@@ -38,8 +38,15 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
   criado = true;
   await admin.query('USE ??', [database]);
   await admin.query(partes[1]);
+  const rotinas = await readFile(path.join(__dirname, '../../../DATABASE/03_rotinas_biblioteca.sql'), 'utf8');
+  // DELIMITER é um comando do cliente Workbench; para o driver, cada bloco $$ é enviado separadamente.
+  for (const bloco of rotinas.replace(/USE\s+biblioteca\s*;/i, '')
+    .replace(/^\s*DELIMITER\s+[^\r\n]+\s*$/gim, '').split('$$')) {
+    const sql = bloco.trim();
+    if (sql) await admin.query(sql);
+  }
   const [tabelas] = await admin.query('SHOW TABLES');
-  assert.equal(tabelas.length, 6);
+  assert.equal(tabelas.length, 7);
 
   Object.assign(process.env, {
     DB_NAME: database, DB_HOST: admin.config.host, DB_PORT: String(admin.config.port),
