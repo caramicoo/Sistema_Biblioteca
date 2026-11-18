@@ -224,24 +224,58 @@
     switch(button.dataset.action){case 'refresh-data':updateFromServer();break;case 'create-book':createBook();break;case 'show-book':showBook(id);break;case 'add-copy':addCopy(id);break;case 'create-reader':createReader();break;case 'show-reader':showReader(id);break;case 'start-return':startReturn(id);break;case 'cancel-reservation':cancelReservation(id);break;}
   });
   document.addEventListener('input',event=>{if(event.target.id==='bookSearch')updateBookRows();if(event.target.id==='readerSearch')updateReaderRows();});
-  document.addEventListener('submit',event=>{
+  document.addEventListener('submit',async event=>{
     if(event.target.id==='loginForm'){
-      event.preventDefault();const form=event.target;
-      if(form.usuario.value.trim()==='funcionario'&&form.senha.value==='demo123'){
-        safeStorage.put(SESSION_KEY,true,true);$('#loginScreen').hidden=true;$('#appShell').hidden=false;$('#loginError').hidden=true;navigate('dashboard');
-      }else $('#loginError').hidden=false;
+      event.preventDefault();
+      const form=event.target,button=form.querySelector('button[type=submit]');
+      button.disabled=true;$('#loginError').hidden=true;
+      try{
+        const result=await api('POST','/auth/login',{login:form.usuario.value.trim(),senha:form.senha.value});
+        token=result.token;sessionStorage.setItem(SESSION_KEY,token);
+        await refreshData();
+        $('#loginScreen').hidden=true;$('#appShell').hidden=false;
+        $('.staff-label').textContent=result.funcionario.nome;
+        form.senha.value='';
+      }catch(error){
+        $('#loginError').textContent=error.message;$('#loginError').hidden=false;
+      }finally{button.disabled=false;}
+      return;
     }
     if(event.target.id==='modalForm'){
-      event.preventDefault();const form=event.target;
-      if(activeModalConfirm&&activeModalConfirm(form)!==false)closeModal();
+      event.preventDefault();const form=event.target,button=form.querySelector('button[type=submit]');
+      if(button)button.disabled=true;
+      try{if(activeModalConfirm){const ok=await activeModalConfirm(form);if(ok!==false)closeModal();}}
+      catch(error){showToast(error.message,true);}
+      finally{if(button?.isConnected)button.disabled=false;}
+      return;
     }
-    if(event.target.id==='loanForm'){event.preventDefault();registerLoan(event.target);}
-    if(event.target.id==='reservationForm'){event.preventDefault();registerReservation(event.target);}
+    if(event.target.id==='loanForm'||event.target.id==='reservationForm'){
+      event.preventDefault();
+      const button=event.target.querySelector('button[type=submit]');
+      button.disabled=true;
+      try{
+        if(event.target.id==='loanForm')await registerLoan(event.target);
+        else await registerReservation(event.target);
+      }catch(error){showToast(error.message,true);}
+      finally{if(button.isConnected)button.disabled=false;}
+    }
   });
-  $('#logoutBtn').addEventListener('click',()=>{safeStorage.remove(SESSION_KEY,true);$('#appShell').hidden=true;$('#loginScreen').hidden=false;$('#loginPassword').value='';currentRoute='dashboard';closeModal();});
+  $('#logoutBtn').addEventListener('click',()=>{
+    token='';sessionStorage.removeItem(SESSION_KEY);data=emptyData();
+    $('#appShell').hidden=true;$('#loginScreen').hidden=false;
+    $('#loginPassword').value='';currentRoute='dashboard';closeModal();
+  });
   $('#menuToggle').addEventListener('click',()=>{$('#sidebar').classList.add('open');$('#mobileScrim').classList.add('open');});
   $('#mobileScrim').addEventListener('click',()=>{$('#sidebar').classList.remove('open');$('#mobileScrim').classList.remove('open');});
   $('#modalRoot').addEventListener('click',event=>{if(event.target===$('#modalRoot'))closeModal();});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('#modalRoot').hidden)closeModal();});
-  if(safeStorage.get(SESSION_KEY,true)){$('#loginScreen').hidden=true;$('#appShell').hidden=false;navigate('dashboard');}
+  if(token){
+    api('GET','/auth/me').then(user=>refreshData().then(()=>{
+      $('#loginScreen').hidden=true;$('#appShell').hidden=false;
+      $('.staff-label').textContent=user.nome||'Funcionário';
+    })).catch(error=>{
+      token='';sessionStorage.removeItem(SESSION_KEY);
+      $('#loginError').textContent=error.message;$('#loginError').hidden=false;
+    });
+  }
 })();
