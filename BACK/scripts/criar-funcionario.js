@@ -13,12 +13,9 @@ async function main() {
     nome = requiredString(await rl.question('Nome do funcionário: '), 'Nome', 120);
     login = requiredString(await rl.question('Login (sem espaços): '), 'Login', 60);
     if (!/^[A-Za-z0-9._-]+$/.test(login)) throw new Error('Login aceita letras, números, . _ -');
-    stdout.write('Senha (mínimo 10 caracteres; digitação oculta): ');
-    // A senha não é ecoada; não é passada em argumentos nem salva em texto puro.
-    rl._writeToOutput = () => {};
-    senha = await rl.question('');
-    rl._writeToOutput = text => stdout.write(text);
-    stdout.write('\n');
+    // Entrada visível e confiável no terminal integrado do Windows; não fica em argumentos do shell.
+    senha = await rl.question('Senha (mínimo 10 caracteres; visível durante a digitação): ');
+
   } finally { rl.close(); }
   const senhaHash = await hashPassword(senha);
   const [result] = await pool.execute('INSERT INTO funcionario (nome,login,senha_hash) VALUES (?,?,?)', [nome,login,senhaHash]);
