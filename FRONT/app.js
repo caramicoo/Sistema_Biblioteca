@@ -1,54 +1,64 @@
-/* Sistema de Biblioteca — protótipo acadêmico frontend. Sem autenticação real nem banco de dados. */
+/* Sistema de Biblioteca — frontend integrado à API e ao MySQL. */
 (() => {
   'use strict';
-  const STORAGE_KEY = 'pi_biblioteca_prototipo_v1';
-  const SESSION_KEY = 'pi_biblioteca_sessao_v1';
+  const SESSION_KEY = 'biblioteca_api_token_v1';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const escapeHTML = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const pad = n => String(n).padStart(2, '0');
   const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const daysFromToday = offset => {const d = new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate() + offset); return isoDate(d);};
-  const dateFromIso = str => {const [y,m,d] = String(str).split('-').map(Number); return new Date(y,m-1,d,12,0,0,0);};
+  const dateFromIso = str => {const [y,m,d] = String(str).slice(0,10).split('-').map(Number); return new Date(y,m-1,d,12,0,0,0);};
   const formatDate = str => {if(!str) return '—'; const d = dateFromIso(str); return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat('pt-BR').format(d) : '—';};
   const diffDays = (first,second) => Math.round((dateFromIso(first) - dateFromIso(second))/86400000);
   const daysLate = loan => loan.dataDevolucao ? 0 : Math.max(0,diffDays(daysFromToday(0),loan.dataPrevista));
-  const safeStorage = {
-    get(k, session=false) {try{return JSON.parse((session?sessionStorage:localStorage).getItem(k));}catch(e){return null;}},
-    put(k,value,session=false) {try{(session?sessionStorage:localStorage).setItem(k,JSON.stringify(value));}catch(e){/* demo stays in memory */}},
-    remove(k,session=false){try{(session?sessionStorage:localStorage).removeItem(k);}catch(e){}}
-  };
-  function seed() {
-    return {
-      livros: [
-        {id:1,titulo:'Dom Casmurro',autor:'Machado de Assis',isbn:'9788535914849',categoria:'Literatura brasileira'},
-        {id:2,titulo:'O Cortiço',autor:'Aluísio Azevedo',isbn:'9788525406958',categoria:'Romance'},
-        {id:3,titulo:'Vidas Secas',autor:'Graciliano Ramos',isbn:'9788501067340',categoria:'Literatura brasileira'},
-        {id:4,titulo:'A Hora da Estrela',autor:'Clarice Lispector',isbn:'9788532529626',categoria:'Romance'},
-        {id:5,titulo:'Memórias Póstumas de Brás Cubas',autor:'Machado de Assis',isbn:'9788535914840',categoria:'Clássicos'},
-        {id:6,titulo:'O Alienista',autor:'Machado de Assis',isbn:'9788525402875',categoria:'Contos'}
-      ],
-      exemplares:[
-        {id:101,livroId:1,tombo:'T-0001'},{id:102,livroId:1,tombo:'T-0002'},
-        {id:103,livroId:2,tombo:'T-0003'},{id:104,livroId:2,tombo:'T-0004'},
-        {id:105,livroId:3,tombo:'T-0005'},{id:106,livroId:4,tombo:'T-0006'},
-        {id:107,livroId:5,tombo:'T-0007'},{id:108,livroId:6,tombo:'T-0008'},{id:109,livroId:6,tombo:'T-0009'}
-      ],
-      leitores:[
-        {id:1,nome:'Ana Oliveira',identificacao:'L-0001',contato:'ana@exemplo.com',ativo:true},
-        {id:2,nome:'Bruno Santos',identificacao:'L-0002',contato:'bruno@exemplo.com',ativo:true},
-        {id:3,nome:'Carla Ferreira',identificacao:'L-0003',contato:'carla@exemplo.com',ativo:true},
-        {id:4,nome:'Diego Martins',identificacao:'L-0004',contato:'diego@exemplo.com',ativo:true},
-        {id:5,nome:'Elisa Ribeiro',identificacao:'L-0005',contato:'elisa@exemplo.com',ativo:true}
-      ],
-      emprestimos:[
-        {id:1,leitorId:1,exemplarId:102,funcionarioRetiradaId:1,funcionarioDevolucaoId:null,dataRetirada:daysFromToday(-20),dataPrevista:daysFromToday(-6),dataDevolucao:null},
-        {id:2,leitorId:2,exemplarId:106,funcionarioRetiradaId:1,funcionarioDevolucaoId:null,dataRetirada:daysFromToday(-8),dataPrevista:daysFromToday(5),dataDevolucao:null}
-      ],
-      reservas:[{id:1,leitorId:3,exemplarId:104,funcionarioId:1,dataReserva:daysFromToday(-1),situacao:'ativa'}]
-    };
+  const emptyData = () => ({livros:[],exemplares:[],leitores:[],emprestimos:[],reservas:[]});
+  let data = emptyData();
+  let token = sessionStorage.getItem(SESSION_KEY) || '';
+  async function api(method,path,body){
+    const headers = {Accept:'application/json'};
+    if(token)headers.Authorization = 'Bearer ' + token;
+    if(body!==undefined)headers['Content-Type']='application/json';
+    let response;
+    try { response=await fetch('/api'+path,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)})}); }
+    catch { throw new Error('Falha de comunicação com a API; verifique Node.js e MySQL.'); }
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok){
+      if(response.status===401 && path!=='/auth/login'){
+        token='';sessionStorage.removeItem(SESSION_KEY);
+        $('#appShell').hidden=true;$('#loginScreen').hidden=false;
+      }
+      throw new Error(result.erro||'Erro HTTP '+response.status);
+    }
+    return result;
   }
-  let data = safeStorage.get(STORAGE_KEY) || seed();
+  async function collect(route){
+    const rows=[];
+    for(let page=1;page<=100;page++){
+      const result=await api('GET',route+'?limit=100&page='+page);
+      if(!Array.isArray(result.dados))throw new Error('Resposta inesperada da API.');
+      rows.push(...result.dados);
+      if(result.dados.length<100)return rows;
+    }
+    throw new Error('Muitos registros para esta visualização.');
+  }
+  async function refreshData(){
+    const [livros,exemplares,leitores,emprestimos,reservas]=await Promise.all([
+      collect('/livros'),collect('/exemplares'),collect('/leitores'),collect('/emprestimos'),collect('/reservas')
+    ]);
+    data={
+      livros:livros.map(v=>({id:Number(v.id_livro),titulo:v.titulo,autor:v.autor,isbn:v.isbn,categoria:v.categoria||''})),
+      exemplares:exemplares.map(v=>({id:Number(v.id_exemplar),livroId:Number(v.id_livro),tombo:v.tombo,situacao:v.situacao})),
+      leitores:leitores.map(v=>({id:Number(v.id_leitor),nome:v.nome,identificacao:v.identificacao,contato:v.contato,ativo:Boolean(v.ativo)})),
+      emprestimos:emprestimos.map(v=>({id:Number(v.id_emprestimo),leitorId:Number(v.id_leitor),exemplarId:Number(v.id_exemplar),funcionarioRetiradaId:Number(v.id_funcionario_retirada),funcionarioDevolucaoId:v.id_funcionario_devolucao==null?null:Number(v.id_funcionario_devolucao),dataRetirada:v.data_retirada?.slice(0,10),dataPrevista:v.data_prevista?.slice(0,10),dataDevolucao:v.data_devolucao?.slice(0,10)||null})),
+      reservas:reservas.map(v=>({id:Number(v.id_reserva),leitorId:Number(v.id_leitor),exemplarId:Number(v.id_exemplar),funcionarioId:Number(v.id_funcionario),dataReserva:v.data_reserva?.slice(0,10),situacao:v.situacao}))
+    };
+    render();
+  }
+  async function perform(method,path,body,message){
+    try{await api(method,path,body);await refreshData();showToast(message);return true;}
+    catch(error){showToast(error.message,true);return false;}
+  }
   let currentRoute = 'dashboard';
   let activeModalConfirm = null;
   let toastTimer = 0;
@@ -67,8 +77,6 @@
   const overdueLoans = () => openLoans().filter(v=>daysLate(v)>0).sort((a,b)=>daysLate(b)-daysLate(a));
   const hasOverdue = readerId => overdueLoans().some(v=>v.leitorId===Number(readerId));
   const activeReservations = () => data.reservas.filter(v=>v.situacao==='ativa');
-  const nextId = rows => Math.max(0,...rows.map(v=>v.id))+1;
-  const save = () => safeStorage.put(STORAGE_KEY,data);
   const e = value => escapeHTML(value);
   const dateToday = daysFromToday(0);
   function badge(status) {
@@ -103,7 +111,7 @@
     const available=data.exemplares.filter(c=>copyStatus(c.id)==='disponível').length;
     const recent=[...openLoans()].sort((a,b)=>b.id-a.id).slice(0,4);
     const activities=recent.map(l=>`<div class="activity"><div class="activity-icon">↗</div><div><strong>${e(bookForCopy(l.exemplarId)?.titulo||'Livro')}</strong><span>Empréstimo de ${e(readerById(l.leitorId)?.nome||'Leitor')} • prazo ${formatDate(l.dataPrevista)}</span></div></div>`).join('');
-    return `<div class="page-head"><div><div class="eyebrow">PAINEL DO FUNCIONÁRIO</div><h1>Visão geral</h1><p>Bem-vindo ao ambiente de demonstração. ${today}.</p></div><div class="page-actions"><button class="btn btn-outline" data-action="reset-data">↺ Restaurar dados</button></div></div>
+    return `<div class="page-head"><div><div class="eyebrow">PAINEL DO FUNCIONÁRIO</div><h1>Visão geral</h1><p>Registros carregados do MySQL. ${today}.</p></div><div class="page-actions"><button class="btn btn-outline" data-action="refresh-data">↻ Atualizar dados</button></div></div>
       <div class="hero"><div><div class="eyebrow">GESTÃO SIMPLIFICADA</div><h1>Todos os livros e atendimentos, em um só lugar.</h1><p>Consulte o acervo, registre retiradas e acompanhe devoluções com clareza.</p></div><button class="btn" data-route="emprestimos">Novo empréstimo <span>→</span></button></div>
       <div class="metrics">${metric('Obras cadastradas',data.livros.length,'Títulos no catálogo','▤')}${metric('Exemplares livres',available,'Cópias disponíveis','▣')}${metric('Empréstimos abertos',openLoans().length,'Retiradas sem devolução','↗')}${metric('Empréstimos vencidos',overdueLoans().length,'Resultado da consulta de prazos','◷',true)}</div>
       <div class="content-grid"><div class="panel"><div class="panel-head"><h2 class="panel-title">Empréstimos em andamento</h2><button class="text-link" data-route="emprestimos">Ver todos →</button></div><div class="panel-content">${activities||'<div class="empty">Nenhum empréstimo em aberto.</div>'}</div></div>
