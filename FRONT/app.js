@@ -10,54 +10,68 @@
   const daysFromToday = offset => {const d = new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate() + offset); return isoDate(d);};
   const dateFromIso = str => {const [y,m,d] = String(str).slice(0,10).split('-').map(Number); return new Date(y,m-1,d,12,0,0,0);};
   const formatDate = str => {if(!str) return '—'; const d = dateFromIso(str); return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat('pt-BR').format(d) : '—';};
-  const diffDays = (first,second) => Math.round((dateFromIso(first) - dateFromIso(second))/86400000);
-  const daysLate = loan => loan.dataDevolucao ? 0 : Math.max(0,diffDays(daysFromToday(0),loan.dataPrevista));
+  const daysLate = loan => loan.diasAtraso;
   const emptyData = () => ({livros:[],exemplares:[],leitores:[],emprestimos:[],reservas:[]});
   let data = emptyData();
   let token = sessionStorage.getItem(SESSION_KEY) || '';
   async function api(method,path,body){
+    const requestToken = token;
     const headers = {Accept:'application/json'};
-    if(token)headers.Authorization = 'Bearer ' + token;
+    if(requestToken)headers.Authorization = 'Bearer ' + requestToken;
     if(body!==undefined)headers['Content-Type']='application/json';
     let response;
     try { response=await fetch('/api'+path,{method,headers,...(body===undefined?{}:{body:JSON.stringify(body)})}); }
     catch { throw new Error('Falha de comunicação com a API; verifique Node.js e MySQL.'); }
     const result=await response.json().catch(()=>({}));
     if(!response.ok){
-      if(response.status===401 && path!=='/auth/login'){
-        token='';sessionStorage.removeItem(SESSION_KEY);
-        $('#appShell').hidden=true;$('#loginScreen').hidden=false;
-      }
+      if(response.status===401 && path!=='/auth/login' && token===requestToken) endSession();
       throw new Error(result.erro||'Erro HTTP '+response.status);
     }
     return result;
   }
-  async function collect(route){
-    const rows=[];
-    for(let page=1;page<=100;page++){
-      const result=await api('GET',route+'?limit=100&page='+page);
-      if(!Array.isArray(result.dados))throw new Error('Resposta inesperada da API.');
-      rows.push(...result.dados);
-      if(result.dados.length<100)return rows;
-    }
-    throw new Error('Muitos registros para esta visualização.');
+  async function collect(route) {
+    const rows = [];
+    const limit = 100;
+    let page = 1;
+    let batch;
+    do {
+      const result = await api('GET',route+'?limit='+limit+'&page='+page);
+      if (!Array.isArray(result.dados) || result.page !== page) throw new Error('Página inesperada da API.');
+      batch = result.dados;
+      rows.push(...batch);
+      page++;
+    } while (batch.length === limit);
+    return rows;
   }
   async function refreshData(){
+    const sessionToken = token;
     const [livros,exemplares,leitores,emprestimos,reservas]=await Promise.all([
       collect('/livros'),collect('/exemplares'),collect('/leitores'),collect('/emprestimos'),collect('/reservas')
     ]);
+    if (sessionToken !== token) return;
     data={
       livros:livros.map(v=>({id:Number(v.id_livro),titulo:v.titulo,autor:v.autor,isbn:v.isbn,categoria:v.categoria||''})),
       exemplares:exemplares.map(v=>({id:Number(v.id_exemplar),livroId:Number(v.id_livro),tombo:v.tombo,situacao:v.situacao})),
       leitores:leitores.map(v=>({id:Number(v.id_leitor),nome:v.nome,identificacao:v.identificacao,contato:v.contato,ativo:Boolean(v.ativo)})),
-      emprestimos:emprestimos.map(v=>({id:Number(v.id_emprestimo),leitorId:Number(v.id_leitor),exemplarId:Number(v.id_exemplar),funcionarioRetiradaId:Number(v.id_funcionario_retirada),funcionarioDevolucaoId:v.id_funcionario_devolucao==null?null:Number(v.id_funcionario_devolucao),dataRetirada:v.data_retirada?.slice(0,10),dataPrevista:v.data_prevista?.slice(0,10),dataDevolucao:v.data_devolucao?.slice(0,10)||null})),
+      emprestimos:emprestimos.map(v=>({id:Number(v.id_emprestimo),leitorId:Number(v.id_leitor),exemplarId:Number(v.id_exemplar),funcionarioRetiradaId:Number(v.id_funcionario_retirada),funcionarioDevolucaoId:v.id_funcionario_devolucao==null?null:Number(v.id_funcionario_devolucao),dataRetirada:v.data_retirada?.slice(0,10),dataPrevista:v.data_prevista?.slice(0,10),dataDevolucao:v.data_devolucao?.slice(0,10)||null,diasAtraso:Number(v.dias_atraso)})),
       reservas:reservas.map(v=>({id:Number(v.id_reserva),leitorId:Number(v.id_leitor),exemplarId:Number(v.id_exemplar),funcionarioId:Number(v.id_funcionario),dataReserva:v.data_reserva?.slice(0,10),situacao:v.situacao}))
     };
     render();
   }
   async function perform(method,path,body,message){
-    try{await api(method,path,body);await refreshData();showToast(message);return true;}
-    catch(error){showToast(error.message,true);return false;}
+    try {
+      await api(method,path,body);
+    } catch (error) {
+      showToast(error.message,true);
+      return false;
+    }
+    try {
+      await refreshData();
+      showToast(message);
+    } catch {
+      showToast(message+' Falha ao recarregar a tela. Atualize os dados antes de continuar.',true);
+    }
+    return true;
   }
   let currentRoute = 'dashboard';
   let activeModalConfirm = null;
@@ -72,13 +86,15 @@
   const bookForCopy = id => {const c=copyById(id);return c?bookById(c.livroId):null;};
   const openLoan = copyId => data.emprestimos.find(v=>v.exemplarId===Number(copyId)&&!v.dataDevolucao);
   const activeReservation = copyId => data.reservas.find(v=>v.exemplarId===Number(copyId)&&v.situacao==='ativa');
-  const copyStatus = id => openLoan(id) ? 'emprestado' : activeReservation(id) ? 'reservado' : 'disponível';
+  const copyStatus = id => {
+    const situacao = copyById(id)?.situacao;
+    return situacao === 'disponivel' ? 'disponível' : situacao;
+  };
   const openLoans = () => data.emprestimos.filter(v=>!v.dataDevolucao);
   const overdueLoans = () => openLoans().filter(v=>daysLate(v)>0).sort((a,b)=>daysLate(b)-daysLate(a));
   const hasOverdue = readerId => overdueLoans().some(v=>v.leitorId===Number(readerId));
   const activeReservations = () => data.reservas.filter(v=>v.situacao==='ativa');
   const e = value => escapeHTML(value);
-  const dateToday = daysFromToday(0);
   function badge(status) {
     const map={disponível:['badge-green','Disponível'],emprestado:['badge-blue','Emprestado'],reservado:['badge-amber','Reservado'],vencido:['badge-red','Vencido'],ativo:['badge-green','Ativo'],atendida:['badge-green','Atendida'],cancelada:['badge-gray','Cancelada']};
     const found=map[status]||['badge-gray',status];return `<span class="badge ${found[0]}">${found[1]}</span>`;
@@ -107,7 +123,7 @@
   const render=()=>navigate(currentRoute);
   function metric(label,num,sub,symbol,red=false){return `<div class="metric ${red?'metric-red':''}"><div class="metric-top"><span>${label}</span><span class="metric-symbol">${symbol}</span></div><div class="metric-value">${num}</div><div class="metric-sub">${sub}</div></div>`;}
   function dashboard(){
-    const today=formatDate(dateToday);
+    const today=formatDate(daysFromToday(0));
     const available=data.exemplares.filter(c=>copyStatus(c.id)==='disponível').length;
     const recent=[...openLoans()].sort((a,b)=>b.id-a.id).slice(0,4);
     const activities=recent.map(l=>`<div class="activity"><div class="activity-icon">↗</div><div><strong>${e(bookForCopy(l.exemplarId)?.titulo||'Livro')}</strong><span>Empréstimo de ${e(readerById(l.leitorId)?.nome||'Leitor')} • prazo ${formatDate(l.dataPrevista)}</span></div></div>`).join('');
@@ -143,11 +159,11 @@
     +`<div class="panel"><div class="table-wrap"><table class="table"><thead><tr><th>Leitor</th><th>Contato</th><th>Situação</th><th>Empréstimos</th><th>Detalhes</th></tr></thead><tbody id="readerTableBody"></tbody></table></div></div>`;}
   function updateReaderRows(){const element=$('#readerTableBody');if(!element)return;const rows=readerRows($('#readerSearch')?.value||'');element.innerHTML=rows.length?rows.join(''):`<tr><td colspan="5"><div class="empty"><strong>Nenhum leitor encontrado.</strong>Tente outra pesquisa.</div></td></tr>`;}
   function selectReaders(){return data.leitores.filter(r=>r.ativo).map(r=>`<option value="${r.id}">${e(r.nome)} • ${e(r.identificacao)}${hasOverdue(r.id)?' (com atraso)':''}</option>`).join('');}
-  function selectCopies(includeLoaned=false){return data.exemplares.filter(c=>includeLoaned||!openLoan(c.id)).map(c=>`<option value="${c.id}">${e(bookForCopy(c.id)?.titulo||'?')} • ${e(c.tombo)} (${copyStatus(c.id)})</option>`).join('');}
+  function selectCopies(includeLoaned=false){return data.exemplares.filter(c=>includeLoaned||c.situacao!=='emprestado').map(c=>`<option value="${c.id}">${e(bookForCopy(c.id)?.titulo||'?')} • ${e(c.tombo)} (${copyStatus(c.id)})</option>`).join('');}
   function loanRows(){return openLoans().slice().sort((a,b)=>b.id-a.id).map(l=>`<tr><td><strong>${e(bookForCopy(l.exemplarId)?.titulo||'')}</strong><span class="subcell">${e(copyById(l.exemplarId)?.tombo||'')}</span></td><td>${e(readerById(l.leitorId)?.nome||'')}</td><td>${formatDate(l.dataRetirada)}</td><td>${formatDate(l.dataPrevista)}</td><td>${daysLate(l)?badge('vencido'):badge('emprestado')}</td><td><button class="text-link" data-action="start-return" data-id="${l.id}">Devolver →</button></td></tr>`);}
   function emprestimos(){return head('Empréstimos','Registre retiradas realizadas pelo funcionário e acompanhe os empréstimos em aberto.')
     +`<div class="form-card"><h2>Registrar novo empréstimo</h2><p>Selecione o leitor e o exemplar. O sistema verificará se a retirada é permitida.</p>
-    <form id="loanForm"><div class="form-grid"><div><label for="loanReader">Leitor *</label><select id="loanReader" name="leitorId" required><option value="">Selecione o leitor</option>${selectReaders()}</select></div><div><label for="loanCopy">Exemplar *</label><select id="loanCopy" name="exemplarId" required><option value="">Selecione o exemplar</option>${selectCopies()}</select></div><div><label for="loanDue">Prazo de devolução *</label><input type="date" id="loanDue" name="dataPrevista" min="${dateToday}" required></div></div>
+    <form id="loanForm"><div class="form-grid"><div><label for="loanReader">Leitor *</label><select id="loanReader" name="leitorId" required><option value="">Selecione o leitor</option>${selectReaders()}</select></div><div><label for="loanCopy">Exemplar *</label><select id="loanCopy" name="exemplarId" required><option value="">Selecione o exemplar</option>${selectCopies()}</select></div><div><label for="loanDue">Prazo de devolução *</label><input type="date" id="loanDue" name="dataPrevista" min="${daysFromToday(0)}" required></div></div>
     <div class="form-actions"><span class="form-help">O prazo é informado manualmente. A política definitiva ainda será validada.</span><button class="btn btn-primary" type="submit">Registrar empréstimo →</button></div></form></div>
     <h2 class="section-title">Empréstimos em aberto</h2>${table(['Obra / exemplar','Leitor','Retirada','Prazo','Situação','Ação'],loanRows(),'Nenhum empréstimo em aberto.')}`;}
   function devolucoes(){return head('Devoluções','Localize um empréstimo em aberto e registre o recebimento do exemplar.')
@@ -165,8 +181,8 @@
     +`<div class="quick-stats"><span class="stat-chip"><strong>${overdueLoans().length}</strong> empréstimo(s) vencido(s)</span></div>`
     +table(['Leitor','Obra / exemplar','Prazo previsto','Dias de atraso','Ação'],overdueLoans().map(l=>`<tr><td><strong>${e(readerById(l.leitorId)?.nome||'')}</strong></td><td>${e(bookForCopy(l.exemplarId)?.titulo||'')}<span class="subcell">${e(copyById(l.exemplarId)?.tombo||'')}</span></td><td>${formatDate(l.dataPrevista)}</td><td><span class="overdue-number">${daysLate(l)} dia(s)</span></td><td><button class="text-link" data-action="start-return" data-id="${l.id}">Registrar devolução →</button></td></tr>`),'Nenhum empréstimo vencido encontrado.');}
   function sobre(){
-    return head('Sobre o protótipo','Versão de demonstração do frontend do Sistema de Biblioteca.')
-      +`<div class="about-grid"><div class="about-card"><h3>O que está incluído</h3><ul><li>Acesso de funcionário (simulado)</li><li>Cadastro e consulta de obras, cópias e leitores</li><li>Registro de empréstimos e devoluções</li><li>Reservas feitas pelo funcionário a pedido do leitor</li><li>Consulta de empréstimos vencidos</li></ul></div><div class="about-card"><h3>O que não está incluído</h3><ul><li>Autenticação real e senhas seguras</li><li>Backend Node.js e API</li><li>Banco MySQL</li><li>Portal do leitor, aplicativo e e-books</li><li>Envio automático de alertas</li></ul></div></div>
+    return head('Sobre o projeto','Sistema de Biblioteca da FATEC Indaiatuba.')
+      +`<div class="about-grid"><div class="about-card"><h3>Atendimento na biblioteca</h3><ul><li>Cadastro e consulta de obras, cópias e leitores</li><li>Registro de empréstimos e devoluções</li><li>Reservas feitas pelo funcionário a pedido do leitor</li><li>Consulta de empréstimos vencidos</li></ul></div><div class="about-card"><h3>Funcionamento do sistema</h3><ul><li>O funcionário entra com seu login individual.</li><li>A interface envia as operações à API Node.js e Express.</li><li>O MySQL mantém o histórico de circulação entre sessões.</li></ul></div></div>
       <h2 class="section-title" style="margin-top:28px">Regras representadas na demonstração</h2><div class="rule-list">
       <div class="rule-item"><b>RN01</b><span>Um exemplar emprestado não pode sair novamente. Se estiver reservado, a retirada só é permitida ao leitor que possui a reserva.</span></div>
       <div class="rule-item"><b>RN02</b><span>Leitor com empréstimo vencido não pode realizar novo empréstimo.</span></div>
@@ -174,7 +190,7 @@
       <div class="rule-item"><b>RN04</b><span>Reserva solicitada pelo leitor e registrada pelo funcionário, associando os dois e o exemplar.</span></div>
       <div class="rule-item"><b>RN05</b><span>Após devolução, o exemplar fica reservado quando existe reserva ativa; caso contrário, disponível.</span></div>
       <div class="rule-item"><b>RN06</b><span>O mesmo leitor não pode manter duas reservas ativas para o mesmo exemplar. Por enquanto, o protótipo também impede reservas simultâneas de leitores diferentes para um exemplar, até a definição da fila.</span></div>
-      </div><div class="callout" style="margin-top:23px"><strong>Limite deste MVP:</strong> os dados fictícios são salvos apenas neste navegador, quando o armazenamento está disponível. Não há autenticação segura nem integração com servidor. Os prazos, limites por leitor e a ordem de atendimento de reservas ainda dependem de validação.</div>`;
+      </div><div class="callout" style="margin-top:23px">Os prazos, os limites por leitor e a ordem de atendimento de reservas ainda dependem de validação pela biblioteca.</div>`;
   }
   const views={dashboard,acervo,leitores,emprestimos,devolucoes,reservas,vencidos,sobre};
   function createBook(){modal('Cadastrar livro','Cadastre uma obra e seu primeiro exemplar.',`<label for="newBookTitle">Título *</label><input id="newBookTitle" name="titulo" maxlength="150" required><label for="newBookAuthor">Autor *</label><input id="newBookAuthor" name="autor" maxlength="120" required><label for="newBookISBN">ISBN *</label><input id="newBookISBN" name="isbn" maxlength="22" required><label for="newBookCategory">Categoria *</label><input id="newBookCategory" name="categoria" maxlength="80" required><label for="newBookCopy">Tombo do exemplar *</label><input id="newBookCopy" name="tombo" maxlength="30" placeholder="Ex.: T-0010" required>`,{submitLabel:'Cadastrar livro',onConfirm:async form=>{
@@ -260,11 +276,18 @@
       finally{if(button.isConnected)button.disabled=false;}
     }
   });
-  $('#logoutBtn').addEventListener('click',()=>{
-    token='';sessionStorage.removeItem(SESSION_KEY);data=emptyData();
-    $('#appShell').hidden=true;$('#loginScreen').hidden=false;
-    $('#loginPassword').value='';currentRoute='dashboard';closeModal();
-  });
+  function endSession() {
+    token='';
+    sessionStorage.removeItem(SESSION_KEY);
+    data=emptyData();
+    currentRoute='dashboard';
+    closeModal();
+    $('#view').replaceChildren();
+    $('#appShell').hidden=true;
+    $('#loginScreen').hidden=false;
+    $('#loginPassword').value='';
+  }
+  $('#logoutBtn').addEventListener('click',endSession);
   $('#menuToggle').addEventListener('click',()=>{$('#sidebar').classList.add('open');$('#mobileScrim').classList.add('open');});
   $('#mobileScrim').addEventListener('click',()=>{$('#sidebar').classList.remove('open');$('#mobileScrim').classList.remove('open');});
   $('#modalRoot').addEventListener('click',event=>{if(event.target===$('#modalRoot'))closeModal();});
