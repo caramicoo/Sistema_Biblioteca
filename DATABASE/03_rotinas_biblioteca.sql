@@ -1,11 +1,10 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
--- Sistema de Biblioteca - rotinas avan�adas MySQL 8.0+
+-- Sistema de Biblioteca - rotinas avançadas MySQL 8.0+
 -- Executar depois de DATABASE/01_schema.sql.
--- Este arquivo n�o cont�m senhas e pode ser versionado no GitHub.
+-- Este arquivo não contém senhas e pode ser versionado no GitHub.
 
 USE biblioteca;
 
--- Hist�rico t�cnico das altera��es de circula��o.
+-- Histórico técnico das alterações de circulação.
 CREATE TABLE IF NOT EXISTS historico_circulacao (
   id_historico BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   entidade VARCHAR(30) NOT NULL,
@@ -84,7 +83,7 @@ BEGIN
   SELECT id_exemplar INTO v_exemplar FROM emprestimo
     WHERE id_emprestimo = p_id_emprestimo AND data_devolucao IS NULL FOR UPDATE;
   IF v_exemplar IS NULL THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Empr�stimo inexistente ou j� devolvido.';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Empréstimo inexistente ou já devolvido.';
   END IF;
   UPDATE emprestimo
     SET data_devolucao = p_data_devolucao, id_funcionario_devolucao = p_id_funcionario
@@ -126,5 +125,4 @@ BEGIN
   END IF;
 END$$
 DELIMITER ;
-
 
