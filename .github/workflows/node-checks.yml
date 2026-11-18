@@ -20,3 +20,20 @@ jobs:
       - run: node --check src/app.js
       - run: node --check src/routes/livros.js
       - run: node --check scripts/criar-funcionario.js
+      - name: Testar a integração com MySQL 8.4
+        shell: bash
+        run: |
+          export MYSQL_TEST_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$MYSQL_TEST_PASSWORD"
+          export MYSQL_ROOT_PASSWORD="$MYSQL_TEST_PASSWORD"
+          mysql_id=$(docker run --detach --env MYSQL_ROOT_PASSWORD --env MYSQL_ROOT_HOST=% --publish 127.0.0.1::3306 mysql:8.4)
+          trap 'docker rm -f "$mysql_id" >/dev/null' EXIT
+          export MYSQL_TEST_PORT
+          MYSQL_TEST_PORT=$(docker port "$mysql_id" 3306/tcp | cut -d: -f2)
+          for tentativa in {1..60}; do
+            if docker exec "$mysql_id" mysqladmin --protocol=tcp --host=127.0.0.1 ping --silent >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          npm run test:integracao

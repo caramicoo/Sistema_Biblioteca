@@ -15,7 +15,7 @@ Aplicação web para apoio a bibliotecas escolares. Frontend em HTML/CSS/JavaScr
 
 ## Fluxo de validação
 
-1. Entre com o funcionário cadastrado (não existe senha padrão `demo123`).
+1. Entre com o login e a senha do funcionário cadastrado.
 2. Cadastre livro e primeiro exemplar, com tombo único.
 3. Cadastre leitor, registre empréstimo e confira a mudança de estado.
 4. Registre devolução e confirme que o exemplar voltou a ficar disponível, se não houver reserva ativa.
@@ -25,7 +25,11 @@ Aplicação web para apoio a bibliotecas escolares. Frontend em HTML/CSS/JavaScr
 
 ### Testes automatizados
 
-Dentro de `BACK` execute `npm test`. Os testes unitários cobrem regras isoladas; **ainda não substituem os testes de integração executados com seu MySQL local**.
+Na pasta `BACK`, execute `npm test` para verificar as regras de circulação, datas e senhas.
+
+Para testar a API com MySQL 8.4, execute `npm run test:integracao`. A suíte gera um banco `biblioteca_teste_…`, cria as seis tabelas a partir do SQL do projeto e remove esse banco ao terminar. Ela verifica autenticação, listagem paginada, cadastro de exemplares, empréstimos, reservas, devoluções e consulta de vencidos.
+
+Configure `MYSQL_TEST_USER` e `MYSQL_TEST_PASSWORD` no ambiente do terminal para uma conta de teste com permissão de criar e remover bancos de teste. `MYSQL_TEST_HOST` e `MYSQL_TEST_PORT` permitem ajustar o endereço padrão `127.0.0.1:3306`. O GitHub Actions executa a suíte em um MySQL temporário com senha gerada a cada execução.
 
 ### Limites
 
