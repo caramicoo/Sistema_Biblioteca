@@ -1,5 +1,7 @@
 # Credenciais locais, dependências e arquivos temporários
 **/.env
+**/.env.*
+!**/.env.example
 **/node_modules/
 **/.DS_Store
 **/npm-debug.log*

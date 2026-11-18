@@ -6,7 +6,7 @@ Aplicação web para apoio a bibliotecas escolares. Frontend em HTML/CSS/JavaScr
 
 1. Instale MySQL Server 8.4 e Node.js 20+.
 2. Abra `DATABASE/01_schema.sql` no MySQL Workbench e execute no servidor local **apenas se ainda não criou as tabelas**.
-3. No VS Code, abra a pasta `BACK`. Instale as dependências com `npm install`.
+3. No VS Code, abra o terminal na pasta `BACK`. Execute `npm ci` para instalar as versões registradas no projeto.
 4. Copie `BACK/.env.example` para `BACK/.env` e preencha os campos `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME=biblioteca` e um `JWT_SECRET` com no mínimo 32 caracteres. **Não suba .env ao GitHub.**
 5. Execute `npm run criar-funcionario` para cadastrar o funcionário. O script pergunta nome, login e senha no terminal. Nesta versão de desenvolvimento, **a senha fica visível durante a digitação**, para evitar a incompatibilidade do terminal do Windows. Execute em ambiente privado.
 6. Execute `npm run dev` em `BACK` e abra **http://localhost:3000/** no navegador.
