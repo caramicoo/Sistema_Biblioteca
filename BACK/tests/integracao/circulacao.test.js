@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -33,14 +32,14 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
 
   const schema = await readFile(path.join(__dirname, '../../../DATABASE/01_schema.sql'), 'utf8');
   const partes = schema.split(/^USE biblioteca;[ \t]*\r?$/m);
-  assert.equal(partes.length, 2, 'O esquema deve separar a sele��o do banco da defini��o das tabelas.');
+  assert.equal(partes.length, 2, 'O esquema deve separar a seleção do banco da definição das tabelas.');
   assert.doesNotMatch(partes[1], /^\s*(?:USE\s|(?:CREATE|DROP)\s+DATABASE\b)/im);
   await admin.query('CREATE DATABASE ?? CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci', [database]);
   criado = true;
   await admin.query('USE ??', [database]);
   await admin.query(partes[1]);
   const rotinas = await readFile(path.join(__dirname, '../../../DATABASE/03_rotinas_biblioteca.sql'), 'utf8');
-  // DELIMITER � um comando do cliente Workbench; para o driver, cada bloco $$ � enviado separadamente.
+  // DELIMITER é um comando do cliente Workbench; para o driver, cada bloco $$ é enviado separadamente.
   for (const bloco of rotinas.replace(/USE\s+biblioteca\s*;/i, '')
     .replace(/^\s*DELIMITER\s+[^\r\n]+\s*$/gim, '').split('$$')) {
     const sql = bloco.trim();
@@ -62,7 +61,7 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
   const senha = randomBytes(20).toString('hex');
   const login = 'funcionario.teste';
   await admin.execute('INSERT INTO funcionario (nome,login,senha_hash) VALUES (?,?,?)',
-    ['Funcion�rio de teste', login, await hashPassword(senha)]);
+    ['Funcionário de teste', login, await hashPassword(senha)]);
   let token;
   async function api(method, rota, status, body, origin = origem) {
     const headers = { Origin: origin };
@@ -73,7 +72,7 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
     return response.json();
   }
 
-  await t.test('Interface, sa�de e login pela mesma origem', async () => {
+  await t.test('Interface, saúde e login pela mesma origem', async () => {
     const html = await fetch(origem);
     assert.equal(html.status, 200);
     assert.match(await html.text(), /id="loginForm"/);
@@ -99,7 +98,7 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
   const segundo = await leitor('Bia');
   const prazo = todayInTimeZone('America/Sao_Paulo');
 
-  await t.test('Cadastros, pagina��o e revers�o de cadastro com tombo duplicado', async () => {
+  await t.test('Cadastros, paginação e reversão de cadastro com tombo duplicado', async () => {
     await api('POST', '/livros/com-exemplar', 409, { ...obra, isbn: 'ISBN-duplicado' });
     assert.equal((await api('GET', '/livros?q=ISBN-duplicado', 200)).dados.length, 0);
     assert.equal((await api('GET', '/livros/' + id_livro, 200)).exemplares.length, 2);
@@ -114,7 +113,7 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
   const emprestar = (id_leitor, exemplar, status) => api('POST', '/emprestimos', status,
     { id_leitor, id_exemplar: exemplar, data_prevista: prazo });
   const situacao = async () => (await api('GET', '/exemplares/' + id_exemplar, 200)).situacao;
-  await t.test('Reserva durante o empr�stimo, devolu��o e retirada pelo titular', async () => {
+  await t.test('Reserva durante o empréstimo, devolução e retirada pelo titular', async () => {
     const retirada = await emprestar(primeiro, id_exemplar, 201);
     await emprestar(segundo, id_exemplar, 409);
     const pedido = { id_leitor: segundo, id_exemplar };
@@ -133,7 +132,7 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
     assert.equal(await situacao(), 'disponivel');
   });
 
-  await t.test('Consulta de vencidos e bloqueio de nova retirada at� a devolu��o', async () => {
+  await t.test('Consulta de vencidos e bloqueio de nova retirada até a devolução', async () => {
     const retirada = await emprestar(primeiro, id_exemplar, 201);
     await admin.execute("UPDATE emprestimo SET data_retirada='2000-01-01', data_prevista='2000-01-02' WHERE id_emprestimo=?",
       [retirada.id_emprestimo]);
@@ -145,4 +144,3 @@ test('Fluxos da biblioteca com Express e MySQL', async t => {
     assert.equal((await api('GET', '/emprestimos/vencidos', 200)).dados.length, 0);
   });
 });
-
